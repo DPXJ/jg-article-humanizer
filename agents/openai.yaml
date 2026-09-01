@@ -1,0 +1,4 @@
+interface:
+  display_name: "镜哥文章拟人化改写"
+  short_description: "按镜哥真实口述逻辑重写文章，保留事实、证据与三处随机毛边"
+  default_prompt: "使用 $jg-article-humanizer 对这篇初稿做拟人化二改，优先恢复真实场景、段落呼吸和个人判断，锁定事实与关键排版，并按规则加入恰好 3 处随机文字毛边。"
