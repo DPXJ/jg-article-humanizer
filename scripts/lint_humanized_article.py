@@ -36,22 +36,29 @@ ABRUPT_OPENERS = (
     "整体来看",
     "总结一下",
 )
-EDGE_PATTERNS = (
-    re.compile(r"我我|这个这个|就就|再再|其实其实|然后然后|所以所以"),
-    re.compile(r"以经|时侯|觉的"),
-)
+EDGE_PATTERNS = {
+    "repetition": re.compile(r"我我|这个这个|就就|再再|其实其实|然后然后|所以所以"),
+    "typo_or_homophone": re.compile(r"以经|时侯|觉的|一致是我的[^。！？\n]{0,20}CP"),
+    "mixed_spacing": re.compile(r"(?:AI|Codex|Agent|Skills?|MCP|token)的"),
+}
 
 
 def visible_paragraphs(text: str) -> list[tuple[int, str]]:
     paragraphs: list[tuple[int, str]] = []
+    in_fence = False
     for lineno, raw in enumerate(text.splitlines(), 1):
         line = raw.strip()
+        if line.startswith(("```", "~~~")):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
         if (
             not line
             or HEADING_RE.match(line)
             or IMAGE_RE.match(line)
             or HTML_ONLY_RE.match(line)
-            or line.startswith((">", "<!--", "```", "~~~"))
+            or line.startswith((">", "<!--"))
         ):
             continue
         paragraphs.append((lineno, re.sub(r"<[^>]+>", "", line)))
@@ -98,14 +105,28 @@ def main() -> int:
                 )
             break
 
-    recognizable_edges = sum(
-        len(pattern.findall("\n".join(paragraph for _, paragraph in paragraphs)))
-        for pattern in EDGE_PATTERNS
-    )
+    edge_hits: list[tuple[int, str, str]] = []
+    for lineno, paragraph in paragraphs:
+        for edge_type, pattern in EDGE_PATTERNS.items():
+            edge_hits.extend(
+                (lineno, edge_type, match.group(0)) for match in pattern.finditer(paragraph)
+            )
+
+    recognizable_edges = len(edge_hits)
     if recognizable_edges != 3:
         warnings.append(
             "recognizable intentional edges: "
             f"{recognizable_edges}; manually verify the required exact total of 3"
+        )
+    edge_types = {edge_type for _, edge_type, _ in edge_hits}
+    if recognizable_edges == 3 and len(edge_types) < 2:
+        warnings.append("intentional edges use fewer than 2 types")
+    edge_lines = Counter(lineno for lineno, _, _ in edge_hits)
+    crowded_lines = sorted(lineno for lineno, count in edge_lines.items() if count > 1)
+    if crowded_lines:
+        warnings.append(
+            "multiple intentional edges appear in one paragraph at line(s): "
+            + ", ".join(map(str, crowded_lines))
         )
 
     if warnings:
